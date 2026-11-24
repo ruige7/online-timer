@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>在线计时器</title>
+<style>
+  :root{
+    --bg:#0f1419;
+    --panel:#1a222c;
+    --panel2:#232f3d;
+    --text:#e8eef4;
+    --muted:#8fa3b5;
+    --accent:#4da3ff;
+    --accent2:#2ecc71;
+    --danger:#ff5a5a;
+    --warn:#ffb020;
+    --radius:14px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    background:var(--bg);
+    color:var(--text);
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    padding:24px 16px 48px;
+  }
+  h1{font-size:26px;font-weight:600;letter-spacing:2px;margin-bottom:6px}
+  .subtitle{color:var(--muted);font-size:13px;margin-bottom:22px}
+  .tabs{display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap;justify-content:center}
+  .tab{
+    border:1px solid #314154;background:var(--panel);color:var(--muted);
+    padding:9px 22px;border-radius:999px;cursor:pointer;font-size:15px;
+    transition:all .15s ease;
+  }
+  .tab:hover{color:var(--text);border-color:var(--accent)}
+  .tab.active{background:var(--accent);border-color:var(--accent);color:#fff}
+  .card{
+    background:var(--panel);
+    border:1px solid #26313f;
+    border-radius:var(--radius);
+    width:100%;max-width:560px;
+    padding:30px 26px 26px;
+    box-shadow:0 10px 30px rgba(0,0,0,.35);
+  }
+  .mode{display:none}
+  .mode.active{display:block}
+  .display{
+    font-family:"SF Mono","JetBrains Mono",Consolas,"Courier New",monospace;
+    font-size:64px;font-weight:600;text-align:center;
+    letter-spacing:2px;padding:14px 0 6px;
+    font-variant-numeric:tabular-nums;
+    user-select:none;
+  }
+  .display .ms{font-size:30px;color:var(--muted)}
+  .display.flash{animation:flash .5s ease-in-out infinite;color:var(--danger)}
+  @keyframes flash{0%,100%{opacity:1}50%{opacity:.25}}
+  .status{text-align:center;color:var(--muted);font-size:13px;min-height:18px;margin-bottom:14px}
+  .btns{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:8px}
+  button{
+    border:none;border-radius:10px;cursor:pointer;
+    padding:11px 24px;font-size:15px;color:#fff;
+    background:var(--panel2);transition:filter .12s ease,transform .05s ease;
+  }
+  button:hover{filter:brightness(1.2)}
+  button:active{transform:scale(.97)}
+  button:disabled{opacity:.4;cursor:not-allowed}
+  .btn-start{background:var(--accent2)}
+  .btn-pause{background:var(--warn);color:#231a00}
+  .btn-reset{background:#3a4757}
+  .btn-lap{background:var(--accent)}
+  .inputs{display:flex;gap:10px;justify-content:center;align-items:flex-end;margin:6px 0 14px;flex-wrap:wrap}
+  .field{display:flex;flex-direction:column;gap:5px;align-items:center}
+  .field label{font-size:12px;color:var(--muted)}
+  .field input{
+    width:74px;padding:9px 6px;text-align:center;font-size:18px;
+    background:var(--panel2);border:1px solid #314154;border-radius:9px;color:var(--text);
+    font-variant-numeric:tabular-nums;
+  }
+  .field input:focus{outline:none;border-color:var(--accent)}
+  .sep{font-size:22px;color:var(--muted);padding-bottom:8px}
+  .presets{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:6px}
+  .preset{
+    background:transparent;border:1px solid #314154;color:var(--muted);
+    padding:7px 16px;font-size:13.5px;border-radius:999px;
+  }
+  .preset:hover{color:var(--text);border-color:var(--accent)}
+  .preset.active{border-color:var(--accent2);color:var(--accent2)}
+  .laps{
+    margin-top:20px;max-height:220px;overflow-y:auto;
+    border-top:1px solid #26313f;padding-top:8px;
+  }
+  .laps:empty{display:none}
+  .lap-row{
+    display:flex;justify-content:space-between;padding:7px 6px;
+    font-family:Consolas,"Courier New",monospace;font-size:14.5px;
+    border-bottom:1px solid #212c38;font-variant-numeric:tabular-nums;
+  }
+  .lap-row span:first-child{color:var(--muted)}
+  .lap-row .diff{color:var(--accent)}
+  footer{margin-top:26px;color:#5b6d7f;font-size:12px;text-align:center;line-height:1.7}
+  @media (max-width:480px){.display{font-size:46px}.display .ms{font-size:22px}}
+</style>
+</head>
+<body>
+  <h1>在线计时器</h1>
+  <div class="subtitle">秒表 · 倒计时 · 番茄钟，一个页面全搞定</div>
+
+  <div class="tabs">
+    <button class="tab active" data-mode="stopwatch">秒表</button>
+    <button class="tab" data-mode="countdown">倒计时</button>
+    <button class="tab" data-mode="pomodoro">番茄钟</button>
+  </div>
+
+  <div class="card">
+    <!-- 秒表 -->
+    <section class="mode active" id="mode-stopwatch">
+      <div class="display" id="swDisplay">00:00:00<span class="ms">.00</span></div>
+      <div class="status" id="swStatus">已就绪</div>
+      <div class="btns">
+        <button class="btn-start" id="swStart">开始</button>
+        <button class="btn-pause" id="swPause" disabled>暂停</button>
+        <button class="btn-lap" id="swLap" disabled>计次</button>
+        <button class="btn-reset" id="swReset" disabled>重置</button>
+      </div>
+      <div class="laps" id="swLaps"></div>
+    </section>
+
+    <!-- 倒计时 -->
+    <section class="mode" id="mode-countdown">
+      <div class="inputs">
+        <div class="field"><label>时</label><input type="number" id="cdH" min="0" max="99" value="0"></div>
+        <div class="sep">:</div>
+        <div class="field"><label>分</label><input type="number" id="cdM" min="0" max="59" value="5"></div>
+        <div class="sep">:</div>
+        <div class="field"><label>秒</label><input type="number" id="cdS" min="0" max="59" value="0"></div>
+      </div>
+      <div class="display" id="cdDisplay">00:05:00</div>
+      <div class="status" id="cdStatus">设置时间后点开始</div>
+      <div class="btns">
+        <button class="btn-start" id="cdStart">开始</button>
+        <button class="btn-pause" id="cdPause" disabled>暂停</button>
+        <button class="btn-reset" id="cdReset" disabled>重置</button>
+      </div>
+    </section>
+
+    <!-- 番茄钟 -->
+    <section class="mode" id="mode-pomodoro">
+      <div class="presets">
+        <button class="preset active" data-min="25" data-label="专注">🍅 专注 25 分钟</button>
+        <button class="preset" data-min="5" data-label="休息">☕ 休息 5 分钟</button>
+      </div>
+      <div class="display" id="pmDisplay">25:00</div>
+      <div class="status" id="pmStatus">专注模式 · 已完成 0 个番茄</div>
+      <div class="btns">
+        <button class="btn-start" id="pmStart">开始</button>
+        <button class="btn-pause" id="pmPause" disabled>暂停</button>
+        <button class="btn-reset" id="pmReset" disabled>重置</button>
+      </div>
+    </section>
+  </div>
+
+  <footer>纯前端单页应用，数据不上传，刷新页面即可重新开始。<br>倒计时结束会有闪烁 + 蜂鸣提醒（请保持页面声音开启）。</footer>
+
+<script>
+"use strict";
+/* ---------- 通用工具 ---------- */
+function pad(n, len){ return String(n).padStart(len === undefined ? 2 : len, "0"); }
+function fmtHMS(ms){
+  if (ms < 0) ms = 0;
+  var totalSec = Math.floor(ms / 1000);
+  var h = Math.floor(totalSec / 3600);
+  var m = Math.floor((totalSec % 3600) / 60);
+  var s = totalSec % 60;
+  return pad(h) + ":" + pad(m) + ":" + pad(s);
+}
+function fmtMS(ms){
+  if (ms < 0) ms = 0;
+  var totalSec = Math.floor(ms / 1000);
+  var m = Math.floor(totalSec / 60);
+  var s = totalSec % 60;
+  return pad(m) + ":" + pad(s);
+}
+function clampInput(el, min, max){
+  var v = parseInt(el.value, 10);
+  if (isNaN(v)) v = min;
+  v = Math.max(min, Math.min(max, v));
+  el.value = v;
+  return v;
+}
+
+/* ---------- 声音提醒（Web Audio） ---------- */
+var audioCtx = null;
+function ensureAudio(){
+  if (!audioCtx){
+    var AC = window.AudioContext || window.webkitAudioContext;
+    if (AC) audioCtx = new AC();
+  }
+  if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+}
+function beep(times){
+  ensureAudio();
+  if (!audioCtx) return;
+  var count = times || 3;
+  for (var i = 0; i < count; i++){
+    (function(idx){
+      var t0 = audioCtx.currentTime + idx * 0.45;
+      var osc = audioCtx.createOscillator();
+      var gain = audioCtx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = 880;
+      gain.gain.setValueAtTime(0.0001, t0);
+      gain.gain.exponentialRampToValueAtTime(0.35, t0 + 0.03);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.32);
+      osc.connect(gain); gain.connect(audioCtx.destination);
+      osc.start(t0); osc.stop(t0 + 0.35);
+    })(i);
+  }
+}
+
+/* ---------- 标签切换 ---------- */
+var tabs = document.querySelectorAll(".tab");
+tabs.forEach(function(tab){
+  tab.addEventListener("click", function(){
+    tabs.forEach(function(t){ t.classList.remove("active"); });
+    tab.classList.add("active");
+    document.querySelectorAll(".mode").forEach(function(m){ m.classList.remove("active"); });
+    document.getElementById("mode-" + tab.dataset.mode).classList.add("active");
+    ensureAudio();
+  });
+});
+
+/* ---------- 秒表 ---------- */
+(function(){
+  var display = document.getElementById("swDisplay");
+  var status  = document.getElementById("swStatus");
+  var btnStart = document.getElementById("swStart");
+  var btnPause = document.getElementById("swPause");
+  var btnLap   = document.getElementById("swLap");
+  var btnReset = document.getElementById("swReset");
+  var lapsBox  = document.getElementById("swLaps");
+
+  var startStamp = 0;     // 本次开始的时间戳
+  var accumulated = 0;    // 暂停前累计毫秒
+  var rafId = null;
+  var running = false;
+  var lapCount = 0;
+  var lastLapTotal = 0;
+
+  function elapsed(){ return running ? accumulated + (performance.now() - startStamp) : accumulated; }
+
+  function render(){
+    var ms = elapsed();
+    var cs = Math.floor((ms % 1000) / 10);
+    display.innerHTML = fmtHMS(ms) + '<span class="ms">.' + pad(cs) + "</span>";
+    if (running) rafId = requestAnimationFrame(render);
+  }
+  function syncButtons(){
+    btnStart.disabled = running;
+    btnPause.disabled = !running;
+    btnLap.disabled   = !running;
+    btnReset.disabled = !running && accumulated === 0 && lapCount === 0;
+  }
+  btnStart.addEventListener("click", function(){
+    ensureAudio();
+    running = true;
+    startStamp = performance.now();
+    status.textContent = "计时中…";
+    render(); syncButtons();
+  });
+  btnPause.addEventListener("click", function(){
+    accumulated = elapsed();
+    running = false;
+    cancelAnimationFrame(rafId);
+    status.textContent = "已暂停";
+    render(); syncButtons();
+  });
+  btnReset.addEventListener("click", function(){
+    running = false;
+    cancelAnimationFrame(rafId);
+    accumulated = 0; lapCount = 0; lastLapTotal = 0;
+    lapsBox.innerHTML = "";
+    status.textContent = "已就绪";
+    render(); syncButtons();
+  });
+  btnLap.addEventListener("click", function(){
+    var total = elapsed();
+    lapCount++;
+    var diff = total - lastLapTotal;
+    lastLapTotal = total;
+    var row = document.createElement("div");
+    row.className = "lap-row";
+    row.innerHTML = "<span>第 " + lapCount + " 次</span>" +
+                    '<span class="diff">+' + fmtHMS(diff) + "</span>" +
+                    "<span>" + fmtHMS(total) + "</span>";
+    lapsBox.insertBefore(row, lapsBox.firstChild);
+  });
+  render(); syncButtons();
+})();
+
+/* ---------- 通用倒计时引擎 ---------- */
+function makeCountdown(opts){
+  var display = document.getElementById(opts.displayId);
+  var status  = document.getElementById(opts.statusId);
+  var btnStart = document.getElementById(opts.startId);
+  var btnPause = document.getElementById(opts.pauseId);
+  var btnReset = document.getElementById(opts.resetId);
+
+  var totalMs = opts.getTotalMs();
+  var remainMs = totalMs;
+  var endStamp = 0;
+  var timerId = null;
+  var running = false;
+  var finished = false;
+
+  function paint(){
+    display.textContent = opts.format(remainMs);
+  }
+  function syncButtons(){
+    btnStart.disabled = running;
+    btnPause.disabled = !running;
+    btnReset.disabled = !running && !finished && remainMs === totalMs;
+  }
+  function stopFlash(){
+    display.classList.remove("flash");
+  }
+  function tick(){
+    remainMs = endStamp - Date.now();
+    if (remainMs <= 0){
+      remainMs = 0;
+      running = false;
+      finished = true;
+      clearInterval(timerId); timerId = null;
+      paint();
+      display.classList.add("flash");
+      beep(3);
+      status.textContent = opts.doneText;
+      if (typeof opts.onDone === "function") opts.onDone();
+      syncButtons();
+      return;
+    }
+    paint();
+  }
+  btnStart.addEventListener("click", function(){
+    ensureAudio();
+    if (!running){
+      if (finished || remainMs <= 0){
+        totalMs = opts.getTotalMs();
+        remainMs = totalMs;
+        finished = false;
+        stopFlash();
+      }
+      if (remainMs <= 0){ status.textContent = opts.emptyText; return; }
+      running = true;
+      endStamp = Date.now() + remainMs;
+      timerId = setInterval(tick, 100);
+      status.textContent = opts.runningText;
+      tick(); syncButtons();
+    }
+  });
+  btnPause.addEventListener("click", function(){
+    if (running){
+      running = false;
+      clearInterval(timerId); timerId = null;
+      remainMs = Math.max(0, endStamp - Date.now());
+      status.textContent = "已暂停";
+      paint(); syncButtons();
+    }
+  });
+  btnReset.addEventListener("click", function(){
+    running = false; finished = false;
+    clearInterval(timerId); timerId = null;
+    stopFlash();
+    totalMs = opts.getTotalMs();
+    remainMs = totalMs;
+    status.textContent = opts.idleText;
+    paint(); syncButtons();
+  });
+  if (typeof opts.onReset === "function") opts.onReset(function(){ btnReset.click(); });
+  paint(); syncButtons();
+  return {
+    refresh: function(){
+      if (!running && !finished){
+        totalMs = opts.getTotalMs();
+        remainMs = totalMs;
+        paint(); syncButtons();
+      }
+    },
+    reset: function(){ btnReset.click(); },
+    isRunning: function(){ return running; }
+  };
+}
+
+/* ---------- 倒计时 ---------- */
+var cdH = document.getElementById("cdH");
+var cdM = document.getElementById("cdM");
+var cdS = document.getElementById("cdS");
+var cd = makeCountdown({
+  displayId: "cdDisplay", statusId: "cdStatus",
+  startId: "cdStart", pauseId: "cdPause", resetId: "cdReset",
+  getTotalMs: function(){
+    var h = clampInput(cdH, 0, 99);
+    var m = clampInput(cdM, 0, 59);
+    var s = clampInput(cdS, 0, 59);
+    return ((h * 60 + m) * 60 + s) * 1000;
+  },
+  format: fmtHMS,
+  idleText: "设置时间后点开始",
+  runningText: "倒计时中…",
+  emptyText: "请先设置一个大于 0 的时间",
+  doneText: "⏰ 时间到！"
+});
+[cdH, cdM, cdS].forEach(function(el){
+  el.addEventListener("change", function(){ cd.refresh(); });
+  el.addEventListener("input",  function(){ cd.refresh(); });
+});
+
+/* ---------- 番茄钟 ---------- */
+var pmState = { minutes: 25, label: "专注", done: 0 };
+var pmStatusEl = document.getElementById("pmStatus");
+function pmIdleText(){
+  return pmState.label + "模式 · 已完成 " + pmState.done + " 个番茄";
+}
+var pm = makeCountdown({
+  displayId: "pmDisplay", statusId: "pmStatus",
+  startId: "pmStart", pauseId: "pmPause", resetId: "pmReset",
+  getTotalMs: function(){ return pmState.minutes * 60 * 1000; },
+  format: fmtMS,
+  idleText: pmIdleText(),
+  runningText: "进行中，加油 💪",
+  emptyText: "请选择一个预设",
+  doneText: "⏰ 时间到！",
+  onDone: function(){
+    if (pmState.label === "专注"){
+      pmState.done++;
+      pmStatusEl.textContent = "⏰ 专注结束！已完成 " + pmState.done + " 个番茄，休息一下吧";
+    } else {
+      pmStatusEl.textContent = "⏰ 休息结束！开始下一个番茄吧";
+    }
+  }
+});
+var pmPresets = document.querySelectorAll(".preset");
+pmPresets.forEach(function(btn){
+  btn.addEventListener("click", function(){
+    pmPresets.forEach(function(b){ b.classList.remove("active"); });
+    btn.classList.add("active");
+    pmState.minutes = parseInt(btn.dataset.min, 10);
+    pmState.label = btn.dataset.label;
+    pm.reset();
+    pmStatusEl.textContent = pmIdleText();
+  });
+});
+</script>
+</body>
+</html>
